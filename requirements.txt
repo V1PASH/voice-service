@@ -1,0 +1,6 @@
+# The service itself.
+Django>=4.2
+
+# The database. minidb is a document store written from scratch:
+# https://github.com/V1PASH/Database
+minidb-db[django]>=0.7.0

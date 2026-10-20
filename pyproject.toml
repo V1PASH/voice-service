@@ -1,0 +1,39 @@
+[project]
+name = "voice-service"
+version = "0.1.0"
+description = "A Django microservice that keeps its data in minidb: a registry of LLM, TTS and STT models, and the voice agents built from them."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "V1PASH" }]
+keywords = ["django", "voice-agent", "llm", "tts", "stt", "minidb", "api"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: Django",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+]
+dependencies = [
+    "Django>=4.2",
+    "minidb-db[django]>=0.7.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pyflakes>=3.0"]
+
+[project.urls]
+Homepage = "https://github.com/V1PASH/voice-service"
+Repository = "https://github.com/V1PASH/voice-service"
+Issues = "https://github.com/V1PASH/voice-service/issues"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["agents", "voice_service"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

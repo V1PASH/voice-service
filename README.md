@@ -1,5 +1,9 @@
 # Voice agent service
 
+[![CI](https://github.com/V1PASH/voice-service/actions/workflows/ci.yml/badge.svg)](https://github.com/V1PASH/voice-service/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/)
+[![minidb](https://img.shields.io/badge/database-minidb%20%3D%3D%200.7.0-blue)](https://github.com/V1PASH/Database)
+
 A small Django microservice that keeps its data in
 **[minidb](https://github.com/V1PASH/Database)**, a document store written
 from scratch.

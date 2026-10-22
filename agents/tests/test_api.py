@@ -5,20 +5,33 @@ from __future__ import annotations
 import json
 
 from django.test import Client, SimpleTestCase
+from minidb import Database
+from minidb.django.database import reset_database, set_database
 
 from agents import storage
 
 
 class ServiceTestCase(SimpleTestCase):
-    """A base class with a clean database and a JSON client."""
+    """A base class with a clean database and a JSON client.
+
+    The tests run against a throwaway in-memory database. Django's test
+    runner knows nothing about minidb, so without this the database handle
+    is redirected by hand — otherwise the tests wipe the *development*
+    database, and seeding it and then running the tests loses the agents.
+    """
 
     def setUp(self) -> None:
         super().setUp()
+        set_database(Database(":memory:"))
         database = storage.get_database()
         for name in ("models", "agent"):
             if name in database.list_collection_names():
                 database[name].delete_many({})
         self.client = Client()
+
+    def tearDown(self) -> None:
+        reset_database()
+        super().tearDown()
 
     def post(self, path: str, payload: dict):
         return self.client.post(path, json.dumps(payload), content_type="application/json")

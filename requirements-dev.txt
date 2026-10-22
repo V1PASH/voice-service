@@ -1,0 +1,5 @@
+# The development tools, on top of the runtime dependencies.
+-r requirements.txt
+
+pyflakes>=3.0
+pytest>=8.0

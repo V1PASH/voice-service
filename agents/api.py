@@ -11,6 +11,8 @@
     GET    /api/agents/<slug>
     PATCH  /api/agents/<slug>
     DELETE /api/agents/<slug>
+    POST   /api/tasks
+    GET    /api/tasks/<session_id>
 """
 
 from __future__ import annotations
@@ -238,3 +240,112 @@ def agent_collection(request: HttpRequest) -> JsonResponse:
         return _ok(document, 201)
 
     return _error(f"{request.method} is not allowed here", 405)
+
+
+# ---------------------------------------------------------------------------
+# tasks — dispatching an agent to run
+# ---------------------------------------------------------------------------
+
+
+def _core_url() -> str:
+    """Where the nitpick-core service is."""
+    from django.conf import settings
+
+    return getattr(settings, "NITPICK_CORE_URL", "http://127.0.0.1:8100")
+
+
+def _core_request(method: str, path: str, payload: dict | None = None) -> Any:
+    """Call the nitpick-core service."""
+    import httpx
+
+    url = f"{_core_url().rstrip('/')}{path}"
+    try:
+        response = httpx.request(
+            method,
+            url,
+            json=payload,
+            timeout=httpx.Timeout(30.0, connect=5.0),
+        )
+    except httpx.HTTPError as error:
+        raise Invalid(
+            f"could not reach the agent runtime at {url}: {error}",
+            ["the nitpick-core service is not running"],
+        ) from error
+
+    if response.status_code >= 400:
+        detail = response.text
+        try:
+            body = response.json()
+            detail = body.get("detail") or body.get("error") or detail
+        except Exception:  # noqa: BLE001 - the body may not be JSON
+            pass
+        raise Invalid(f"the agent runtime refused the task: {detail}", [str(detail)])
+
+    if not response.content:
+        return {}
+    try:
+        return response.json()
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+@csrf_exempt
+@_guard
+def task_collection(request: HttpRequest) -> JsonResponse:
+    """Dispatch an agent to run.
+
+    The agent is looked up in the registry first, so an unknown handle is
+    rejected here rather than at the runtime. The task is then handed to
+    nitpick-core, which dispatches it through Prefect.
+    """
+    if request.method == "GET":
+        # The runtime owns the sessions, so this is a proxy of its list.
+        limit, offset = _paging(request)
+        body = _core_request("GET", "/sessions")
+        results = body.get("results") if isinstance(body, dict) else body
+        results = list(results or [])
+        total = len(results) if isinstance(body, dict) and "count" not in body else (
+            body.get("count", len(results)) if isinstance(body, dict) else len(results)
+        )
+        page = results[offset : offset + limit] if limit else results[offset:]
+        return _ok(_page(page, total, limit, offset))
+
+    if request.method != "POST":
+        return _error(f"{request.method} is not allowed here", 405)
+
+    body = _body(request)
+    handle = body.get("agent") or body.get("handle")
+    if not isinstance(handle, str) or not handle.strip():
+        raise Invalid("an agent handle is required", ["agent"])
+
+    # The agent has to exist. The runtime resolves it too, but failing here
+    # gives the caller a 404 instead of a runtime error.
+    agent = storage.get_agent_by_handle(handle.strip())
+
+    room_id = body.get("room_id")
+    if room_id is not None and not isinstance(room_id, str):
+        raise Invalid("room_id must be a string", ["room_id"])
+
+    metadata = body.get("metadata")
+    if metadata is not None and not isinstance(metadata, dict):
+        raise Invalid("metadata must be an object", ["metadata"])
+
+    result = _core_request(
+        "POST",
+        "/tasks",
+        {
+            "handle": agent.get("handle") or agent.get("slug"),
+            "room_id": room_id,
+            "metadata": metadata or {},
+        },
+    )
+    return _ok(result, 202)
+
+
+@csrf_exempt
+@_guard
+def task_detail(request: HttpRequest, session_id: str) -> JsonResponse:
+    """One dispatched task."""
+    if request.method != "GET":
+        return _error(f"{request.method} is not allowed here", 405)
+    return _ok(_core_request("GET", f"/sessions/{session_id}"))

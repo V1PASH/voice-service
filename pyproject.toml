@@ -17,6 +17,7 @@ classifiers = [
 dependencies = [
     "Django>=4.2",
     "minidb-db[django]>=0.7.0",
+    "httpx>=0.26",
 ]
 
 [project.optional-dependencies]

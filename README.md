@@ -45,6 +45,34 @@ service uses a different database:
 MINIDB_PATH=/var/lib/voice/voice.db python manage.py runserver
 ```
 
+## Dispatching an agent
+
+The service can hand an agent to the [nitpick-core](https://github.com/V1PASH/nitpick-core)
+runtime, which dispatches it through Prefect and serves the room:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/tasks \
+  -H 'Content-Type: application/json' \
+  -d '{"agent": "acme-support", "room_id": "demo"}'
+```
+
+```json
+{
+  "id": "ses-9f2a9ba93c22",
+  "handle": "acme-support",
+  "room_id": "demo",
+  "status": "queued",
+  "flow_run_id": "a1434cd6-2ce0-4a9f-a7fa-0a606d9e35d4"
+}
+```
+
+The agent is looked up in the registry first, so an unknown handle is a
+`404` from this service rather than a runtime error. `GET /api/tasks` lists
+the runtime's sessions, and `GET /api/tasks/<session_id>` fetches one.
+
+Point the service at the runtime with `NITPICK_CORE_URL` (default
+`http://127.0.0.1:8100`).
+
 ## The API
 
 ### Health

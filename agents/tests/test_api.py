@@ -295,6 +295,86 @@ class AgentTests(ServiceTestCase):
 
 
 # ---------------------------------------------------------------------------
+# tasks — dispatching an agent to the runtime
+# ---------------------------------------------------------------------------
+
+
+class TaskTests(ServiceTestCase):
+    """The task endpoint hands work to the nitpick-core service.
+
+    The runtime is stubbed out, so these tests do not need it running.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.post("/api/agents", {"name": "Customer Support", "handle": "acme-support"})
+        self.calls: list[tuple[str, str, dict]] = []
+
+        from agents import api
+
+        self._original_core_request = api._core_request
+
+        def fake_request(method, path, payload=None):
+            self.calls.append((method, path, payload or {}))
+            if path == "/tasks":
+                return {
+                    "id": "ses-123",
+                    "handle": "acme-support",
+                    "room_id": (payload or {}).get("room_id"),
+                    "status": "queued",
+                    "flow_run_id": "flow-1",
+                }
+            if path.startswith("/sessions/"):
+                return {"id": path.rsplit("/", 1)[-1], "status": "running"}
+            return {"count": 1, "results": [{"id": "ses-123", "status": "running"}]}
+
+        api._core_request = fake_request
+
+    def tearDown(self) -> None:
+        from agents import api
+
+        api._core_request = self._original_core_request
+        super().tearDown()
+
+    def test_dispatching_an_agent(self):
+        response = self.post("/api/tasks", {"agent": "acme-support", "room_id": "demo"})
+        self.assertEqual(response.status_code, 202)
+        body = self.body(response)
+        self.assertEqual(body["id"], "ses-123")
+        self.assertEqual(body["flow_run_id"], "flow-1")
+
+        method, path, payload = self.calls[0]
+        self.assertEqual(method, "POST")
+        self.assertEqual(path, "/tasks")
+        self.assertEqual(payload["handle"], "acme-support")
+        self.assertEqual(payload["room_id"], "demo")
+
+    def test_an_agent_may_be_named_by_its_handle(self):
+        response = self.post("/api/tasks", {"agent": "acme-support"})
+        self.assertEqual(response.status_code, 202)
+
+    def test_an_unknown_agent_is_a_404(self):
+        """The agent is checked here, so the runtime is never asked."""
+        response = self.post("/api/tasks", {"agent": "nobody"})
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(self.calls, [])
+
+    def test_a_task_without_an_agent_is_rejected(self):
+        response = self.post("/api/tasks", {})
+        self.assertEqual(response.status_code, 400)
+
+    def test_fetching_a_task(self):
+        response = self.client.get("/api/tasks/ses-123")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.body(response)["status"], "running")
+
+    def test_listing_tasks(self):
+        response = self.client.get("/api/tasks")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.body(response)["count"], 1)
+
+
+# ---------------------------------------------------------------------------
 # the collections themselves
 # ---------------------------------------------------------------------------
 

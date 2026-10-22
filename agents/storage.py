@@ -24,6 +24,7 @@ __all__ = [
     "delete_model",
     "list_agents",
     "get_agent",
+    "get_agent_by_handle",
     "create_agent",
     "update_agent",
     "delete_agent",
@@ -288,6 +289,22 @@ def get_agent(slug: str) -> dict:
     document = get_database()["agent"].find_one({"slug": slug})
     if document is None:
         raise NotFound(f"no agent called {slug!r}")
+    return document
+
+
+def get_agent_by_handle(handle: str) -> dict:
+    """One agent, by its handle.
+
+    A handle defaults to the slug, so the slug works as a handle too. The
+    handle is what the agent runtime dispatches on, so this is the lookup
+    that matches.
+    """
+    collection = get_database()["agent"]
+    document = collection.find_one({"handle": handle})
+    if document is None:
+        document = collection.find_one({"slug": handle})
+    if document is None:
+        raise NotFound(f"no agent with the handle {handle!r}")
     return document
 
 

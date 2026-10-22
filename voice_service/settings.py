@@ -28,6 +28,10 @@ DATABASES = {
 # The minidb database holding the models and the agents.
 MINIDB_PATH = os.environ.get("MINIDB_PATH", str(BASE_DIR / "voice.db"))
 
+# Where the nitpick-core service is. The service dispatches the agents this
+# one stores, so it has to be reachable.
+NITPICK_CORE_URL = os.environ.get("NITPICK_CORE_URL", "http://127.0.0.1:8100")
+
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.auth",

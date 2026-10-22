@@ -157,9 +157,13 @@ def _validate(kind: str, document: dict) -> dict:
 
 
 def list_models(
-    kind: str | None = None, search: str | None = None, active_only: bool = False
-) -> list[dict]:
-    """Every model in the registry."""
+    kind: str | None = None,
+    search: str | None = None,
+    active_only: bool = False,
+    limit: int = 0,
+    offset: int = 0,
+) -> tuple[list[dict], int]:
+    """Every model in the registry, and how many there are in total."""
     collection = get_database()["models"]
     query: dict[str, Any] = {}
     if kind:
@@ -177,7 +181,19 @@ def list_models(
             or needle in str(document.get("slug", "")).lower()
             or needle in str(document.get("handle", "")).lower()
         ]
-    return sorted(documents, key=lambda document: (document.get("kind", ""), document.get("slug", "")))
+    documents.sort(
+        key=lambda document: (document.get("kind", ""), document.get("slug", ""))
+    )
+    return _page(documents, limit, offset), len(documents)
+
+
+def _page(documents: list[dict], limit: int, offset: int) -> list[dict]:
+    """A slice of a result set."""
+    if offset:
+        documents = documents[offset:]
+    if limit and limit > 0:
+        documents = documents[:limit]
+    return documents
 
 
 def get_model(slug: str) -> dict:
@@ -249,7 +265,10 @@ def _check_model_references(document: dict) -> None:
 # ---------------------------------------------------------------------------
 
 
-def list_agents(search: str | None = None) -> list[dict]:
+def list_agents(
+    search: str | None = None, limit: int = 0, offset: int = 0
+) -> tuple[list[dict], int]:
+    """Every agent, and how many there are in total."""
     collection = get_database()["agent"]
     documents = list(collection.find({}))
     if search:
@@ -261,7 +280,8 @@ def list_agents(search: str | None = None) -> list[dict]:
             or needle in str(document.get("slug", "")).lower()
             or needle in str(document.get("handle", "")).lower()
         ]
-    return sorted(documents, key=lambda document: document.get("slug", ""))
+    documents.sort(key=lambda document: document.get("slug", ""))
+    return _page(documents, limit, offset), len(documents)
 
 
 def get_agent(slug: str) -> dict:

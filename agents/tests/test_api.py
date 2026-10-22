@@ -30,6 +30,72 @@ class ServiceTestCase(SimpleTestCase):
         return json.loads(response.content)
 
 
+class PaginationTests(ServiceTestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        for index in range(5):
+            self.post("/api/models", {"name": f"Model {index}", "kind": "llm"})
+
+    def test_everything_is_returned_by_default(self):
+        body = self.body(self.client.get("/api/models"))
+        self.assertEqual(body["count"], 5)
+        self.assertEqual(body["total"], 5)
+
+    def test_a_limit_cuts_the_page(self):
+        body = self.body(self.client.get("/api/models?limit=2"))
+        self.assertEqual(body["count"], 2)
+        self.assertEqual(body["total"], 5)
+        self.assertEqual(body["limit"], 2)
+
+    def test_an_offset_skips_the_start(self):
+        body = self.body(self.client.get("/api/models?limit=2&offset=2"))
+        self.assertEqual(body["count"], 2)
+        self.assertEqual(body["offset"], 2)
+        self.assertEqual(body["results"][0]["slug"], "model-2")
+
+    def test_paging_through_everything_covers_it_all(self):
+        seen = []
+        for offset in (0, 2, 4):
+            body = self.body(self.client.get(f"/api/models?limit=2&offset={offset}"))
+            seen.extend(model["slug"] for model in body["results"])
+        self.assertEqual(sorted(seen), [f"model-{index}" for index in range(5)])
+
+    def test_a_bad_limit_is_rejected(self):
+        response = self.client.get("/api/models?limit=lots")
+        self.assertEqual(response.status_code, 400)
+
+    def test_agents_are_paged_too(self):
+        for index in range(3):
+            self.post("/api/agents", {"name": f"Agent {index}"})
+        body = self.body(self.client.get("/api/agents?limit=2"))
+        self.assertEqual(body["count"], 2)
+        self.assertEqual(body["total"], 3)
+
+
+class SchemaTests(ServiceTestCase):
+    def test_the_openapi_document_is_served(self):
+        response = self.client.get("/api/schema")
+        self.assertEqual(response.status_code, 200)
+        body = self.body(response)
+        self.assertEqual(body["openapi"], "3.1.0")
+        self.assertIn("/api/models", body["paths"])
+        self.assertIn("/api/agents", body["paths"])
+        self.assertIn("/api/models/{slug}", body["paths"])
+
+    def test_the_schema_describes_both_collections(self):
+        body = self.body(self.client.get("/api/schema"))
+        components = body["components"]["schemas"]
+        self.assertIn("Model", components)
+        self.assertIn("Agent", components)
+        for field in ("stt", "model", "tts", "prompt", "config", "handle"):
+            self.assertIn(field, components["Agent"]["properties"])
+
+    def test_the_schema_knows_the_model_kinds(self):
+        body = self.body(self.client.get("/api/schema"))
+        kinds = body["components"]["schemas"]["Model"]["properties"]["kind"]["enum"]
+        self.assertEqual(sorted(kinds), ["llm", "stt", "tts"])
+
+
 # ---------------------------------------------------------------------------
 # health
 # ---------------------------------------------------------------------------

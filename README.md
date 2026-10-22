@@ -64,11 +64,24 @@ curl http://127.0.0.1:8000/api/health
 }
 ```
 
+### The API description
+
+```bash
+curl http://127.0.0.1:8000/api/schema
+```
+
+An OpenAPI 3.1 document, so other services can generate a client from it.
+It is built from the same schemas the API validates against, so it cannot
+drift from the code.
+
 ### Models
 
 ```bash
 # every model
 curl http://127.0.0.1:8000/api/models
+
+# a page at a time
+curl "http://127.0.0.1:8000/api/models?limit=20&offset=40"
 
 # just the LLMs, or the TTS ones, or the STT ones
 curl "http://127.0.0.1:8000/api/models?kind=llm"
@@ -161,6 +174,26 @@ back:
 | **No broken links** | A model that an agent uses cannot be deleted -- `409` naming the agents that hold it |
 | **Slugs** | Made from the name when you do not send one |
 | **Merging** | A `PATCH` merges into `config` instead of replacing it |
+
+## Paging
+
+Both list endpoints take `limit` and `offset`:
+
+```bash
+curl "http://127.0.0.1:8000/api/models?limit=20&offset=40"
+```
+
+```json
+{
+  "count": 20,
+  "total": 137,
+  "limit": 20,
+  "offset": 40,
+  "results": [...]
+}
+```
+
+`limit=0` (the default) means "all of them".
 
 ## Tests
 

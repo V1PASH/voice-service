@@ -29,6 +29,7 @@ from .storage import Conflict, Invalid, NotFound
 
 __all__ = [
     "health",
+    "schema",
     "model_collection",
     "model_detail",
     "agent_collection",
@@ -66,6 +67,27 @@ def _error(message: str, status: int = 400, details: list[str] | None = None) ->
     if details:
         body["details"] = details
     return JsonResponse(body, status=status, json_dumps_params={"indent": 2})
+
+
+def _paging(request: HttpRequest) -> tuple[int, int]:
+    """The ``limit`` and ``offset`` from the query string."""
+    try:
+        limit = max(0, int(request.GET.get("limit", 0) or 0))
+        offset = max(0, int(request.GET.get("offset", 0) or 0))
+    except ValueError as error:
+        raise Invalid("limit and offset must be whole numbers") from error
+    return limit, offset
+
+
+def _page(results: list[dict], total: int, limit: int, offset: int) -> dict:
+    """A page of results."""
+    return {
+        "count": len(results),
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "results": results,
+    }
 
 
 def _guard(function: Callable) -> Callable:
@@ -109,6 +131,14 @@ def health(request: HttpRequest) -> JsonResponse:
     )
 
 
+@_guard
+def schema(request: HttpRequest) -> JsonResponse:
+    """The OpenAPI description of this service."""
+    from .openapi import openapi_schema
+
+    return _ok(openapi_schema())
+
+
 # ---------------------------------------------------------------------------
 # models
 # ---------------------------------------------------------------------------
@@ -149,12 +179,15 @@ def model_collection(request: HttpRequest) -> JsonResponse:
         kind = request.GET.get("kind") or None
         if kind and kind not in ("llm", "tts", "stt"):
             return _error("kind must be one of llm, tts, stt", 400)
-        models = storage.list_models(
+        limit, offset = _paging(request)
+        models, total = storage.list_models(
             kind=kind,
             search=request.GET.get("q") or None,
             active_only=request.GET.get("active") == "true",
+            limit=limit,
+            offset=offset,
         )
-        return _ok({"count": len(models), "results": models})
+        return _ok(_page(models, total, limit, offset))
 
     if request.method == "POST":
         document = storage.create_model(_body(request))
@@ -194,8 +227,11 @@ def agent_detail(request: HttpRequest, slug: str) -> JsonResponse:
 def agent_collection(request: HttpRequest) -> JsonResponse:
     """List the agents, or create one."""
     if request.method == "GET":
-        agents = storage.list_agents(search=request.GET.get("q") or None)
-        return _ok({"count": len(agents), "results": agents})
+        limit, offset = _paging(request)
+        agents, total = storage.list_agents(
+            search=request.GET.get("q") or None, limit=limit, offset=offset
+        )
+        return _ok(_page(agents, total, limit, offset))
 
     if request.method == "POST":
         document = storage.create_agent(_body(request))
